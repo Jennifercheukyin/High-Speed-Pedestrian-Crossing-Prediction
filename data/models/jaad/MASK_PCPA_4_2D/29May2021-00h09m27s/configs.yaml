@@ -1,0 +1,39 @@
+data_opts:
+  data_split_type: default
+  fstride: 1
+  min_track_size: 76
+  sample_type: beh
+  seq_type: crossing
+  subset: default
+model_opts:
+  apply_class_weights: true
+  balance_data: false
+  dataset: jaad
+  enlarge_ratio: 1.5
+  fusion_method: sum
+  fusion_point: early
+  generator: true
+  model: MASK_PCPA_4_2D
+  normalize_boxes: true
+  obs_input_type:
+  - local_context_cnn
+  - mask_cnn
+  - pose
+  - box
+  - speed
+  obs_length: 16
+  overlap: 0.8
+  time_to_event:
+  - 30
+  - 60
+net_opts:
+  backbone: vgg
+  cell_type: gru
+  global_pooling: avg
+  num_hidden_units: 256
+  regularizer_val: 0.0001
+train_opts:
+  batch_size: 2
+  epochs: 40
+  learning_scheduler: null
+  lr: 5.0e-07

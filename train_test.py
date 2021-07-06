@@ -101,6 +101,7 @@ def run(config_file=None):
 
     # update model and training options from the config file
     for dataset_idx, dataset in enumerate(model_configs['exp_opts']['datasets']):
+        print('Current working dataset: ', dataset)
         configs['data_opts']['sample_type'] = 'beh' if 'beh' in dataset else 'all'
         configs['model_opts']['overlap'] = 0.6 if 'pie' in dataset else 0.8
         configs['model_opts']['dataset'] = dataset.split('_')[0]
@@ -136,7 +137,7 @@ def run(config_file=None):
             # imdb = JAAD(data_path=os.environ.copy()['JAAD_PATH'])
 
             # if use local path
-            imdb = JAAD(data_path='/home/haolin/CITR/PedestrianActionBenchmark/JAAD/')
+            imdb = JAAD(data_path='./JAAD/')
 
         # get sequences
         beh_seq_train = imdb.generate_data_trajectory_sequence('train', **configs['data_opts'])
