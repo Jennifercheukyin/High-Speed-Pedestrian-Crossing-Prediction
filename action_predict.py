@@ -284,6 +284,11 @@ class ActionPredict(object):
         print("Generating {} features crop_type={} crop_mode={}\
               \nsave_path={}, ".format(data_type, crop_type, crop_mode,
                                        save_path))
+
+        print('img_seq shape: ', img_sequences.shape)
+        print('ped_ids shape: ', ped_ids.shape)
+        print('bbox_sequences shape: ', bbox_sequences.shape)
+        
         # load segmentation model
         segmodel_path = "deeplabv3_mnv2_cityscapes_train_2018_02_05.tar.gz"
         segmodel = DeepLabModel(segmodel_path)
@@ -643,6 +648,7 @@ class ActionPredict(object):
         obs_length = opts['obs_length']
         time_to_event = opts['time_to_event']
         normalize = opts['normalize_boxes']
+        print('normalize: ', normalize)
 
         try:
             d['speed'] = data_raw['obd_speed'].copy()
@@ -670,14 +676,15 @@ class ActionPredict(object):
                     start_idx = len(seq) - obs_length - time_to_event[1]
                     end_idx = len(seq) - obs_length - time_to_event[0]
                     seqs.extend([seq[i:i + obs_length] for i in
-                                 range(start_idx, end_idx + 1, olap_res)])
+                                 range(start_idx, end_idx + 1, olap_res)]) # for each sample, created 11 subsequences, so size 194 -> 2134
                 d[k] = seqs
 
             for seq in data_raw['bbox']:
                 start_idx = len(seq) - obs_length - time_to_event[1]
                 end_idx = len(seq) - obs_length - time_to_event[0]
                 d['tte'].extend([[len(seq) - (i + obs_length)] for i in
-                                range(start_idx, end_idx + 1, olap_res)])
+                                range(start_idx, end_idx + 1, olap_res)]) 
+
         if normalize:
             for k in d.keys():
                 if k != 'tte':
@@ -692,10 +699,16 @@ class ActionPredict(object):
             for k in d.keys():
                 d[k] = np.array(d[k])
 
+
         d['crossing'] = np.array(d['crossing'])[:, 0, :]
-        pos_count = np.count_nonzero(d['crossing'])
-        neg_count = len(d['crossing']) - pos_count
+        pos_count = np.count_nonzero(d['crossing']) # num of pedestrians that will cross
+        neg_count = len(d['crossing']) - pos_count # num of pedestrians that will not cross 
+
         print("Negative {} and positive {} sample counts".format(neg_count, pos_count))
+        print('img_seq shape: ', d['image'].shape)
+        print('ped_ids shape: ', d['ped_id'].shape)
+        print('bbox_sequences shape: ', d['box_org'].shape)
+        print('crossing: ', d['crossing'].shape)
 
         return d, neg_count, pos_count
 
@@ -793,7 +806,7 @@ class ActionPredict(object):
             data_gen_params['crop_type'] = 'mask'
             # data_gen_params['crop_mode'] = 'pad_resize'
         elif 'local_context_cnn' in feature_type:
-            data_gen_params['crop_type'] = 'context_cnn'
+            data_gen_params['crop_type'] = 'local_context_cnn'
         elif 'local_context' in feature_type:
             data_gen_params['crop_type'] = 'context'
             data_gen_params['crop_resize_ratio'] = eratio
@@ -809,6 +822,11 @@ class ActionPredict(object):
                 save_folder_name = '_'.join([save_folder_name, str(eratio)])
         data_gen_params['save_path'], _ = get_path(save_folder=save_folder_name,
                                                    dataset=dataset, save_root_folder='data/features')
+
+        print('img_seq shape: ', data['image'].shape)
+        print('ped_ids shape: ', data['ped_id'].shape)
+        print('bbox_sequences shape: ', data['box_org'].shape)
+
         if 'flow' in feature_type:
             return self.get_optical_flow(data['image'],
                                          data['box_org'],
@@ -834,12 +852,14 @@ class ActionPredict(object):
             to the length of optical flow window) and negative and positive sample counts
         """
 
+        print('Enter ActionPredict get_data')
         self._generator = model_opts.get('generator', False)
         data_type_sizes_dict = {}
         process = model_opts.get('process', True)
         dataset = model_opts['dataset']
         data, neg_count, pos_count = self.get_data_sequence(data_type, data_raw, model_opts)
-
+        print('data shape after get_data_sequence: ', data['image'].shape)
+        
         data_type_sizes_dict['box'] = data['box'].shape[1:]
         if 'speed' in data.keys():
             data_type_sizes_dict['speed'] = data['speed'].shape[1:]
@@ -1032,7 +1052,7 @@ class ActionPredict(object):
         model_path, _ = get_path(**path_params, file_name='model.h5')
 
         # Read train data
-        data_train = self.get_data('train', data_train, {**model_opts, 'batch_size': batch_size}) 
+        data_train = self.get_data('train', data_train, {**model_opts, 'batch_size': batch_size}) # images are processed through cnn 
 
         if data_val is not None:
             data_val = self.get_data('val', data_val, {**model_opts, 'batch_size': batch_size})['data']
@@ -1040,7 +1060,7 @@ class ActionPredict(object):
                 data_val = data_val[0]
 
         # Create model
-        train_model = self.get_model(data_train['data_params'])
+        train_model = self.get_model(data_train['data_params']) # images are processed through gru
 
         # Train the model
         class_w = self.class_weights(model_opts['apply_class_weights'], data_train['count'])
@@ -5428,6 +5448,7 @@ class MASK_PCPA_4_2D(ActionPredict):
         # self._backbone ='vgg16'
 
     def get_data(self, data_type, data_raw, model_opts):
+        print('Enter MASK_PCPA_4_2D get_data')
         assert model_opts['obs_length'] == 16
         model_opts['normalize_boxes'] = False
         self._generator = model_opts.get('generator', False)
@@ -5562,6 +5583,7 @@ class MASK_PCPA_4_2D(ActionPredict):
 def action_prediction(model_name):
     for cls in ActionPredict.__subclasses__():
         if cls.__name__ == model_name:
+            print('method name: ', cls.__name__)
             return cls
     raise Exception('Model {} is not valid!'.format(model_name))
 

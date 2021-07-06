@@ -71,7 +71,6 @@ class JAAD(object):
         self._annotation_appearance_path = join(self._jaad_path, 'annotations_appearance')
         self._clips_path = join(self._jaad_path, 'JAAD_clips')
         self._images_path = join(self._jaad_path, 'images')
-        # self._mask_path = join(self._jaad_path,'mask')
 
     # Path generators
     @property
@@ -104,6 +103,8 @@ class JAAD(object):
             vid_id_file = join(self._data_split_ids_path, subset, s + '.txt')
             with open(vid_id_file, 'rt') as fid:
                 vid_ids.extend([x.strip() for x in fid.readlines()])
+
+        print('Number of train videos: ', len(vid_ids))
         return vid_ids
 
     def _get_video_ids(self):
@@ -1212,7 +1213,7 @@ class JAAD(object):
 
         print('Split: %s' % image_set)
         print('Number of pedestrians: %d ' % num_pedestrians)
-        print('Total number of samples: %d ' % len(image_seq))
+        print('Total number of samples: %d ' % len(image_seq)) # samples are composed in terms of pedestrians. for the same video, a pedestrian of interest will have a sequence 
 
         return {'image': image_seq,
                 'pid': pids_seq,
