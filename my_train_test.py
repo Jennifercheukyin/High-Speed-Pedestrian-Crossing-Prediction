@@ -16,9 +16,9 @@ import pdb
 def train_test(epoch):
 
 	train_dataset = JAADDataset('train', 'MASK_PCPA_jaad_2d')
-	train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True)
+	train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True, drop_last=True)
 	test_dataset = JAADDataset('test', 'MASK_PCPA_jaad_2d')
-	test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=True)
+	test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=True, drop_last=True)
 
 	model = MyModel().cuda()
 	weight = torch.Tensor([1760.0/2134.0, 1-1760.0/2134.0]).cuda() 
