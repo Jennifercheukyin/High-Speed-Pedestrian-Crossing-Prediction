@@ -4,11 +4,13 @@ import torch
 import torchvision
 from torchvision import transforms, utils
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import matplotlib.image as mpimg
 from action_predict import *
 from jaad_data import *
-from PIL import Image 
+from PIL import Image, ImageDraw 
 from torch.utils.data import DataLoader
+from utils import *
 
 
 class JAADDataset(torch.utils.data.Dataset): 
@@ -28,6 +30,12 @@ class JAADDataset(torch.utils.data.Dataset):
 		beh_seq_train = self.imdb.generate_data_trajectory_sequence(self.data_type, **self.configs['data_opts'])
 		self.method_class = action_prediction(self.configs['model_opts']['model'])(**self.configs['net_opts'])
 		self.data_raw = self.get_data(self.data_type, beh_seq_train, {**self.configs['model_opts'], 'batch_size': 2})
+		self.poses = get_pose(self.data_raw['data']['image'], 
+								self.data_raw['data']['ped_id'], 
+								data_type=self.data_type,
+								file_path='data/features/jaad/poses',
+								dataset='jaad')
+		# use bounding box crop data
 		
 		self.transform = transforms.Compose([transforms.Resize((224,224)), 
 										transforms.ToTensor(), 
@@ -43,40 +51,48 @@ class JAADDataset(torch.utils.data.Dataset):
 		"""
 		img_paths = self.data_raw['data']['image'][idx] # (16,1)
 		ped_ids = self.data_raw['data']['ped_id'][idx]
-		label = self.data_raw['data']['crossing'][idx]
+		labels = self.data_raw['data']['crossing'][idx]
+		bbox = self.data_raw['data']['box_org'][idx]  # 'bbox': list([x1, y1, x2, y2])
+		poses = self.poses[idx]
+		poses = np.reshape(poses, (poses.shape[0], 18, 2))
+
+		# cordinates = bbox[0]
+		# bw, bh = cordinates[2] - cordinates[0], cordinates[3] - cordinates[1]
+		# print(bbox)
+		# fig, ax = plt.subplots()
+
+		# imp = img_paths[0]
+		# im = Image.open(imp)
+		# im_crop = im.crop(cordinates)
+		# img = self.transform(im_crop)
+		# img = img.cpu().detach().numpy()
+		# img = img.transpose(1,2,0)
+		# ax.imshow(img)
+		# # rect = patches.Rectangle((cordinates[0], cordinates[1]), bw, bh, linewidth=1, edgecolor='r', facecolor='none')
+		# # ax.add_patch(rect)
+
+		# # plot pose 
+		# pose = poses[0]
+		# plt.scatter(pose[:, 0] * 224, pose[:, 1] * 224)
+
+		# plt.show()
+
 		
+		# read img from paths and transform img path to image of size (3,224,224)
 		img_seq = []
-		img_features_seq = []
-
-		for imp, p in zip(img_paths, ped_ids):
-			# img = './JAAD/images/video_0001/00491.png'
-
-			# transform img path to image of size (3,224,224)
+		for imp, coordinates in zip(img_paths, bbox): # img = './JAAD/images/video_0001/00491.png 
 			img = Image.open(imp)
+			img = img.crop(coordinates)
 			img = self.transform(img)
 			img = torch.squeeze(img, axis=0)
 			img = img.detach().numpy()
 			img_seq.append(img)
 
-			# get pkl file to facilitate training
-			if(self.data_type == 'train'): 
-				set_id = imp.split('/')[-3]  
-				vid_id = imp.split('/')[-2]
-				img_name = imp.split('/')[-1].split('.')[0]
-				img_save_folder = os.path.join('data/features/jaad/local_context_cnn_vgg_raw_1.5', set_id, vid_id)
-				img_save_path = os.path.join(img_save_folder, img_name + '_' + p[0] + '.pkl')
-				with open(img_save_path, 'rb') as fid:
-				    try:
-				        img_features = pickle.load(fid)
-				    except:
-				        img_features = pickle.load(fid, encoding='bytes')
-				img_features_seq.append(img_features)
-			
 		img_seq = torch.Tensor(img_seq) # tensor (16,3,224,224)
-		label = torch.Tensor(label)
-		img_features_seq = torch.Tensor(img_features_seq) # TODO: needs to be normalized 
-	
-		return img_seq, label, img_features_seq
+		labels = torch.Tensor(labels)
+		poses = torch.Tensor(poses)
+
+		return img_seq, labels, poses
 
 	def __len__(self): 
 		return self.data_raw['data']['crossing'].shape[0] # 2134
@@ -159,7 +175,6 @@ class JAADDataset(torch.utils.data.Dataset):
 		# self._generator = model_opts.get('generator', False)
 		# data_type_sizes_dict = {}
 		# process = model_opts.get('process', True)
-		dataset = model_opts['dataset']
 		data, neg_count, pos_count = self.method_class.get_data_sequence(data_type, data_raw, model_opts)
 
 		return {'data': data,
@@ -173,6 +188,16 @@ if __name__ == "__main__":
 	train_dataset = JAADDataset('train', 'MASK_PCPA_jaad_2d')
 	train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True)
 	
-	img_seq, label, ped_ids = train_dataset.__getitem__(0)
+	img_seq, labels, poses = train_dataset.__getitem__(0)
 	print(img_seq.shape)
-	print(ped_ids.shape)
+	print(labels.shape)
+	print(poses.shape)
+	# train_dataset.__getitem__(0)
+
+
+	# poses = get_pose(train_dataset.data_raw['data']['image'], 
+	# 				train_dataset.data_raw['data']['ped_id'], 
+	# 				data_type='train',
+    #                 file_path='data/features/jaad/poses',
+    #                 dataset='jaad')
+	# print(poses.shape)

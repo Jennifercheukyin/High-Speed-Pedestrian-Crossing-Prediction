@@ -1012,7 +1012,7 @@ class JAAD(object):
                   'sample_type': 'all',  # 'beh'
                   'subset': 'default',
                   'height_rng': [0, float('inf')],
-                  'squarify_ratio': 0,
+                  'squarify_ratio': 1,
                   'data_split_type': 'default',  # kfold, random, default
                   'seq_type': 'intention',
                   'min_track_size': 15,

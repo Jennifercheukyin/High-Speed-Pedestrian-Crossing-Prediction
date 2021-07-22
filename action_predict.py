@@ -643,7 +643,6 @@ class ActionPredict(object):
              'ped_id': data_raw['pid'].copy(),
              'crossing': data_raw['activities'].copy(),
              'image': data_raw['image'].copy()}
-
         balance = opts['balance_data'] if data_type == 'train' else False
         obs_length = opts['obs_length']
         time_to_event = opts['time_to_event']
@@ -684,7 +683,7 @@ class ActionPredict(object):
                 end_idx = len(seq) - obs_length - time_to_event[0]
                 d['tte'].extend([[len(seq) - (i + obs_length)] for i in
                                 range(start_idx, end_idx + 1, olap_res)]) 
-
+        
         if normalize:
             for k in d.keys():
                 if k != 'tte':

@@ -108,8 +108,8 @@ class SqueezeNet(nn.Module):
                     init.constant_(m.bias, 0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.features(x) # (64,512,13,13)
-        pool = nn.AdaptiveAvgPool2d(1) # (64,512,1,1)
+        x = self.features(x)  # (64,512,13,13)
+        pool = nn.AdaptiveAvgPool2d(1)  # (64,512,1,1)
         x = pool(x)
         return torch.flatten(x, 1)
 
@@ -152,24 +152,42 @@ def squeezenet1_1(pretrained: bool = False, progress: bool = True, **kwargs: Any
 
 
 class MyModel(nn.Module):
-	def __init__(self):
-		super().__init__()
-		self.squeezenet = SqueezeNet()
-		self.gru = nn.GRU(input_size=512, hidden_size=512, num_layers=2, bidirectional=False)
-		self.linear = nn.Linear(512,2)
-		self.sigmoid = nn.Sigmoid()
 
-	def forward(self, x, h0):
-		n, l, c, h, w = x.shape
-		x = x.view(n*l, c, h, w)
-		img_feature = self.squeezenet(x) # nl, 512
-		img_feature = img_feature.view(n, l, -1).permute(1,0,2) # l, n, 512
-		gru_feature, hn = self.gru(img_feature, h0) # l, n, d
-		prediction = gru_feature[-1, :, :] # n, d
-		prediction = self.linear(prediction)
-		# prediction = self.sigmoid(prediction)
+    def __init__(
+        self,
+    ) -> None:
+        super(MyModel, self).__init__()
+        self.squeezenet = SqueezeNet()
+        self.gru = nn.GRU(input_size=512, hidden_size=512,
+                        num_layers=2, bidirectional=False)
+        self.linear = nn.Linear(512, 2)
+        self.sigmoid = nn.Sigmoid()
+        self.pose_layers = nn.Sequential(
+            nn.Linear(512, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Linear(512, 36),
+            nn.Sigmoid()
+        )
 
-		return prediction
+
+    def forward(self, x, h0):
+        n, l, c, h, w = x.shape
+        x = x.view(n*l, c, h, w)
+        img_feature = self.squeezenet(x) # nl, 512
+    
+        # pose 
+        pose_prediction = self.pose_layers(img_feature)
+        pose_prediction = pose_prediction.reshape(n, l, 18, 2)
+        
+        # crossing prediction
+        img_feature = img_feature.view(n, l, -1).permute(1,0,2) # l, n, 512
+        gru_feature, hn = self.gru(img_feature, h0) # l, n, d
+        prediction = gru_feature[-1, :, :] # n, d
+        prediction = self.linear(prediction)
+        # prediction = self.sigmoid(prediction)
+
+        return prediction, pose_prediction
 
 
 if __name__ == "__main__":
@@ -177,5 +195,5 @@ if __name__ == "__main__":
 	model = MyModel()
 	x = torch.randn(4,16,3,224,224)
 
-	y = model(x,h0)
-	print(y)
+	feature, pose = model(x,h0)
+	print(feature.shape, pose.shape)
