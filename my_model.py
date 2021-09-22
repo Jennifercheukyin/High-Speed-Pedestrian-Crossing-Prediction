@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
-# from .utils import load_state_dict_from_url
+from torch.hub import load_state_dict_from_url
 from typing import Any
 
 __all__ = ['SqueezeNet', 'squeezenet1_0', 'squeezenet1_1']
@@ -157,7 +157,7 @@ class MyModel(nn.Module):
         self,
     ) -> None:
         super(MyModel, self).__init__()
-        self.squeezenet = SqueezeNet()
+        self.squeezenet = squeezenet1_1(pretrained=True)
         self.gru = nn.GRU(input_size=512, hidden_size=512,
                         num_layers=2, bidirectional=False)
         self.linear = nn.Linear(512, 2)
@@ -169,13 +169,23 @@ class MyModel(nn.Module):
             nn.Linear(512, 36),
             nn.Sigmoid()
         )
-
+        self.speed_layers = nn.Sequential(
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Linear(256, 1),
+            nn.Sigmoid()
+        )
 
     def forward(self, x, h0):
         n, l, c, h, w = x.shape
         x = x.view(n*l, c, h, w)
         img_feature = self.squeezenet(x) # nl, 512
     
+        # speed 
+        speed_prediction = self.speed_layers(img_feature)
+        speed_prediction = speed_prediction.reshape(n, l, 1)
+
         # pose 
         pose_prediction = self.pose_layers(img_feature)
         pose_prediction = pose_prediction.reshape(n, l, 18, 2)
@@ -187,7 +197,7 @@ class MyModel(nn.Module):
         prediction = self.linear(prediction)
         # prediction = self.sigmoid(prediction)
 
-        return prediction, pose_prediction
+        return prediction, pose_prediction, speed_prediction
 
 
 if __name__ == "__main__":
@@ -195,5 +205,5 @@ if __name__ == "__main__":
 	model = MyModel()
 	x = torch.randn(4,16,3,224,224)
 
-	feature, pose = model(x,h0)
-	print(feature.shape, pose.shape)
+	feature, pose, speed = model(x,h0)
+	print(feature.shape, pose.shape, speed)
