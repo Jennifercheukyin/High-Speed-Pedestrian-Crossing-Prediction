@@ -110,6 +110,7 @@ class MobileNetV2(nn.Module):
         x = self.features(x)
         x = x.mean(3).mean(2)
         # x = self.classifier(x)
+        
         return x
 
     def _initialize_weights(self):
@@ -148,30 +149,32 @@ class MobileNetModel(nn.Module):
     ) -> None:
         super(MobileNetModel, self).__init__()
         self.mobilenet = mobilenet_v2(True)
-        self.gru = nn.GRU(input_size=1280, hidden_size=512,
+        self.gru = nn.GRU(input_size=512, hidden_size=512,
                         num_layers=2, bidirectional=False)
         self.linear = nn.Linear(512, 2)
         self.sigmoid = nn.Sigmoid()
+        self.shrink = nn.Linear(1280, 512)
         self.pose_layers = nn.Sequential(
-            nn.Linear(1280, 512),
+            nn.Linear(512, 512),
             nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Linear(512, 36),
             nn.Sigmoid()
         )
         self.speed_layers = nn.Sequential(
-            nn.Linear(1280, 256),
+            nn.Linear(512, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Linear(256, 1),
             nn.Sigmoid()
-        )
+        ) # linear layers may be too large, too many arguments 
 
     def forward(self, x, h0):
         n, l, c, h, w = x.shape
         x = x.view(n*l, c, h, w)
         img_feature = self.mobilenet(x) # nl, 1280
-    
+        img_feature = self.shrink(img_feature)
+
         # speed 
         speed_prediction = self.speed_layers(img_feature)
         speed_prediction = speed_prediction.reshape(n, l, 1)

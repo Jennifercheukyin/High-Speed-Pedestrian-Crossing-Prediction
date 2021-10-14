@@ -129,7 +129,7 @@ class JAADDataset(torch.utils.data.Dataset):
         self.configs['train_opts']['batch_size'] = self.model_configs['exp_opts']['batch_size']
         self.configs['train_opts']['lr'] = self.model_configs['exp_opts']['lr']
         self.configs['train_opts']['epochs'] = self.model_configs['exp_opts']['epochs']
-
+        
         model_name = self.configs['model_opts']['model']
         # Remove speed in case the dataset is jaad
         if 'RNN' in model_name and 'jaad' in dataset:

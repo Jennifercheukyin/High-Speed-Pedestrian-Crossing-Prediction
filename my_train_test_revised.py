@@ -8,7 +8,8 @@ import torchvision.models as models
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from my_model import MyModel 
+from my_model import MyModel
+from my_model_mobilenets import MobileNetModel
 import pdb, os, sys
 from my_utils import Bar, Logger, AverageMeter, accuracy, mkdir_p, savefig, MovingAverage, AverageMeter_Mat, worker_init_fn
 import argparse
@@ -18,8 +19,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', default='0', help='GPU to use [default: GPU 0]')
 parser.add_argument('--log_dir', default='log1', help='Log dir [default: log]')
 parser.add_argument('--epochs', type=int, default=2, help='Epoch to run [default: 100]')
-parser.add_argument('--batch_size', type=int, default=4, help='Batch Size during training [default: 32]')
-parser.add_argument('--lr', type=float, default=1e-2, help='Learning rate')
+parser.add_argument('--batch_size', type=int, default=4, help='Batch Size during training [default: 4]')
+parser.add_argument('--lr', type=float, default=1e-5, help='Learning rate')
 parser.add_argument('--lambda', type=float, default=1.0, help='Weight for balancing loss terms')
 parser.add_argument('--wd', type=float, default=1e-5, help='Weight decay')
 
@@ -41,20 +42,22 @@ def log_string(out_str):
 
 log_string(' '.join(sys.argv))
 
+torch.cuda.empty_cache()
+
 train_dataset = JAADDataset('train', 'MASK_PCPA_jaad_2d')
 train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
 test_dataset = JAADDataset('test', 'MASK_PCPA_jaad_2d')
-test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=True, drop_last=True)
+test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
-model = MyModel().cuda()
-weight = torch.Tensor([1760.0/2134.0, 1-1760.0/2134.0]).cuda() 
+model = MobileNetModel().cuda()
+weight = torch.Tensor([1760.0/2134.0, 1-1760.0/2134.0]).cuda() # [1760/8613, 1-1760/8613] for jaad_all
 label_criterion = nn.CrossEntropyLoss(weight=weight)
 bce_criterion = nn.BCELoss()
 optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, \
     milestones=[50, 75], gamma=0.1)
 
-_lambda = 1.0
+_lambda = 0
 
 max_acc = 0.0
 
@@ -85,9 +88,10 @@ for e in range(args.epochs):
         optimizer.zero_grad()
         h0 = torch.zeros(2,4,512).cuda() # (n_layers * n_directions, batch_size, hidden_size)
         train_outputs, train_predicted_poses, train_predicted_speed = model(train_img_seq, h0) 
+        print(train_outputs)
 
         prediction = torch.softmax(train_outputs.detach(), dim=1)[:,1] > 0.5
-        prediction = prediction * 1.0 
+        prediction = prediction * 1.0
         # pdb.set_trace()
         correct = (prediction == train_labels.float()) * 1.0
 

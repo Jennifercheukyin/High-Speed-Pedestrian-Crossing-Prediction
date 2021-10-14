@@ -183,8 +183,8 @@ class MyModel(nn.Module):
         img_feature = self.squeezenet(x) # nl, 512
     
         # speed 
-        speed_prediction = self.speed_layers(img_feature)
-        speed_prediction = speed_prediction.reshape(n, l, 1)
+        # speed_prediction = self.speed_layers(img_feature)
+        # speed_prediction = speed_prediction.reshape(n, l, 1)
 
         # pose 
         pose_prediction = self.pose_layers(img_feature)
@@ -197,7 +197,7 @@ class MyModel(nn.Module):
         prediction = self.linear(prediction)
         # prediction = self.sigmoid(prediction)
 
-        return prediction, pose_prediction, speed_prediction
+        return prediction, pose_prediction #, speed_prediction
 
 
 if __name__ == "__main__":
@@ -205,5 +205,5 @@ if __name__ == "__main__":
 	model = MyModel()
 	x = torch.randn(4,16,3,224,224)
 
-	feature, pose, speed = model(x,h0)
+	feature, pose = model(x,h0)
 	print(feature.shape, pose.shape, speed)
