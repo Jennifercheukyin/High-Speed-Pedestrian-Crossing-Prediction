@@ -167,6 +167,7 @@ class MyModel(nn.Module):
             nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Linear(512, 36),
+            nn.Dropout(p=0.5),
             nn.Sigmoid()
         )
         self.speed_layers = nn.Sequential(
@@ -174,6 +175,7 @@ class MyModel(nn.Module):
             nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Linear(256, 1),
+            nn.Dropout(p=0.5),
             nn.Sigmoid()
         )
 
@@ -183,8 +185,8 @@ class MyModel(nn.Module):
         img_feature = self.squeezenet(x) # nl, 512
     
         # speed 
-        # speed_prediction = self.speed_layers(img_feature)
-        # speed_prediction = speed_prediction.reshape(n, l, 1)
+        speed_prediction = self.speed_layers(img_feature)
+        speed_prediction = speed_prediction.reshape(n, l, 1)
 
         # pose 
         pose_prediction = self.pose_layers(img_feature)
@@ -197,7 +199,7 @@ class MyModel(nn.Module):
         prediction = self.linear(prediction)
         # prediction = self.sigmoid(prediction)
 
-        return prediction, pose_prediction #, speed_prediction
+        return prediction, pose_prediction, speed_prediction
 
 
 if __name__ == "__main__":

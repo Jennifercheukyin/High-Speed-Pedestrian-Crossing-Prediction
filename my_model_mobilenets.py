@@ -159,13 +159,15 @@ class MobileNetModel(nn.Module):
             nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Linear(512, 36),
+            nn.Dropout(p=0.5),
             nn.Sigmoid()
         )
         self.speed_layers = nn.Sequential(
             nn.Linear(512, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
-            nn.Linear(256, 1),
+            nn.Linear(256, 1), 
+            nn.Dropout(p=0.5),
             nn.Sigmoid()
         ) # linear layers may be too large, too many arguments 
 

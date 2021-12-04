@@ -14,6 +14,7 @@ import pdb, os, sys
 from my_utils import Bar, Logger, AverageMeter, accuracy, mkdir_p, savefig, MovingAverage, AverageMeter_Mat, worker_init_fn
 import argparse
 from tensorboardX import SummaryWriter
+from sklearn.metrics import roc_auc_score
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', default='0', help='GPU to use [default: GPU 0]')
@@ -21,7 +22,7 @@ parser.add_argument('--log_dir', default='log1', help='Log dir [default: log]')
 parser.add_argument('--epochs', type=int, default=2, help='Epoch to run [default: 100]')
 parser.add_argument('--batch_size', type=int, default=4, help='Batch Size during training [default: 4]')
 parser.add_argument('--lr', type=float, default=1e-5, help='Learning rate')
-parser.add_argument('--lambda', type=float, default=1.0, help='Weight for balancing loss terms')
+parser.add_argument('--lamb', type=float, default=1.0, help='Weight for balancing loss terms')
 parser.add_argument('--wd', type=float, default=1e-5, help='Weight decay')
 
 args = parser.parse_args()
@@ -49,15 +50,15 @@ train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle
 test_dataset = JAADDataset('test', 'MASK_PCPA_jaad_2d')
 test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
-model = MobileNetModel().cuda()
-weight = torch.Tensor([1760.0/2134.0, 1-1760.0/2134.0]).cuda() # [1760/8613, 1-1760/8613] for jaad_all
+model = MyModel().cuda()
+weight = torch.Tensor([1760.0/8613.0, 1-1760.0/8613.0]).cuda() # [1760/8613, 1-1760/8613] for jaad_all
 label_criterion = nn.CrossEntropyLoss(weight=weight)
 bce_criterion = nn.BCELoss()
 optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, \
     milestones=[50, 75], gamma=0.1)
 
-_lambda = 0
+_lambda = args.lamb
 
 max_acc = 0.0
 
@@ -73,6 +74,8 @@ for e in range(args.epochs):
     train_running_acc = MovingAverage(20)
     test_running_loss = AverageMeter()
     test_running_acc = AverageMeter()
+    train_auc_roc_score = MovingAverage(20)
+    test_auc_roc_score = AverageMeter()
 
     log_string('epoch %d' %e)
     model.train()
@@ -86,11 +89,19 @@ for e in range(args.epochs):
         train_speed = train_speed.cuda()
 
         optimizer.zero_grad()
-        h0 = torch.zeros(2,4,512).cuda() # (n_layers * n_directions, batch_size, hidden_size)
+        h0 = torch.zeros(2,args.batch_size,512).cuda() # (n_layers * n_directions, batch_size, hidden_size)
         train_outputs, train_predicted_poses, train_predicted_speed = model(train_img_seq, h0) 
-        print(train_outputs)
-
+        print("train_outputs", train_outputs)
+        
+        try: 
+            auc_score = roc_auc_score(train_labels.cpu(), train_outputs.detach().cpu()[:,1])
+            train_auc_roc_score.update(auc_score)
+            print("auc_roc_score", auc_score)
+        except ValueError: 
+            pass
+        
         prediction = torch.softmax(train_outputs.detach(), dim=1)[:,1] > 0.5
+        # print("prediction", prediction)
         prediction = prediction * 1.0
         # pdb.set_trace()
         correct = (prediction == train_labels.float()) * 1.0
@@ -112,7 +123,7 @@ for e in range(args.epochs):
         
         writer.add_scalar('Accuracy', acc.item())
         if (i + 1) % 10 == 0:    
-            log_string('Train loss: %.4f, Train acc: %2.2f%%' %(train_running_loss.avg(), train_running_acc.avg()*100.0))
+            log_string('Train loss: %.4f, Train acc: %2.2f%%, Train auc-roc score: %2.2f%%' %(train_running_loss.avg(), train_running_acc.avg()*100.0, train_auc_roc_score.avg()))
 
     model.eval()
     for i, data in enumerate(test_dataloader): 
@@ -122,8 +133,17 @@ for e in range(args.epochs):
         test_poses = test_poses.cuda()
         test_speed = test_speed.cuda()
 
-        h0 = torch.zeros(2,4,512).cuda()
+        h0 = torch.zeros(2,args.batch_size,512).cuda()
         test_outputs, test_predicted_poses, test_predicted_speed = model(test_img_seq, h0)
+        
+        try:
+            auc_score = roc_auc_score(test_labels.cpu(), test_outputs.detach().cpu()[:,1])
+            test_auc_roc_score.update(auc_score)
+            print("auc_roc_score:", auc_score)
+        except ValueError: 
+            pass
+
+
         prediction = torch.softmax(test_outputs.detach(), dim=1)[:,1] > 0.5
         prediction = prediction * 1.0 
         # pdb.set_trace()
@@ -137,9 +157,9 @@ for e in range(args.epochs):
         acc = correct.sum() / test_labels.shape[0]
         test_running_loss.update(loss.item())
         test_running_acc.update(acc.item())
-
+        
         if (i + 1) % 10 == 0:
-                        log_string('Test loss: %.4f, Test acc: %2.2f%%' %(test_running_loss.avg, test_running_acc.avg*100.0))
+            log_string('Test loss: %.4f, Test acc: %2.2f%%, Test auc-roc acore: %2.2f%%' %(test_running_loss.avg, test_running_acc.avg*100.0, test_auc_roc_score.avg()))
     log_string('Train loss: %.4f ' %train_running_loss.avg())
     log_string('Train accuracy: %2.2f%% ' %(train_running_acc.avg()*100))
     log_string('Test loss: %.4f ' %test_running_loss.avg)
